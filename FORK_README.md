@@ -25,6 +25,33 @@ I didn't put any billing info to OPENAI or DEEPSEEK
 Notes:
 When running jupyter notebooks in the page in the upper right you have to set environment.
 
+OpenAI calls for other APIs
+GROK_BASE_URL = "https://api.x.ai/v1"
+grok = OpenAI(base_url=GROK_BASE_URL, api_key=grok_api_key)
+
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+gemini = OpenAI(base_url=GEMINI_BASE_URL, api_key=gemini_api_key)
+
+## System Prompts 
+# System Prompt (system_prompt):
+
+Acts like giving the AI its job description
+Tells it to be an NFL injury report analyst
+Defines exactly what information to look for (name, injury, status)
+Specifies how to format the output (markdown tables)
+This stays consistent across all injury report requests
+
+# User Prompt (user_prompt_prefix):
+
+Gives the specific task for this particular website
+Tells it to ignore non-injury content
+Specifies what to do with the website content that follows
+Gets combined with the actual website content
+Messages List:
+
+Combines both prompts in the format OpenAI expects
+Always has system message first, then user message
+
 Git Flow:
 # fetch latest from upstream
 git fetch upstream
