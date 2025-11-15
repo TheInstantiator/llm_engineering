@@ -1,19 +1,35 @@
+import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from typing import List, Dict
 import math
 from openai import OpenAI
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(override=True)
-
+load_dotenv(find_dotenv(), override=True)
 
 class TokenPredictor:
-    def __init__(self, model_name: str):
-        self.client = OpenAI()
-        self.messages = []
-        self.predictions = []
+    def __init__(self, model_provider: str, model_name: str):
         self.model_name = model_name
+        api_key = None
+        base_url = None
+
+        if model_provider == "openai":
+            api_key = os.getenv("OPENAI_API_KEY")
+        elif model_provider == "grok":
+            api_key = os.getenv("GROK_API_KEY")
+            base_url = os.getenv("GROK_URL")
+        elif model_provider == "gemini":
+            api_key = os.getenv("GEMINI_API_KEY")
+            base_url = os.getenv("GEMINI_URL")
+        elif model_provider == "ollama":
+            api_key = "ollama"
+            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        
+        print(api_key[:4])
+        print(base_url)
+        print(self.model_name)
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def predict_tokens(self, prompt: str, max_tokens: int = 100) -> List[Dict]:
         """
@@ -40,7 +56,7 @@ class TokenPredictor:
 
                 # Get top predicted token and probability
                 top_token = token
-                top_prob = logprob_dict[token]
+                top_prob = logprob_dict.get(token, -100) # Use get for safety
 
                 # Get alternative predictions
                 alternatives = []
@@ -97,15 +113,23 @@ def create_token_graph(model_name: str, predictions: List[Dict]) -> nx.DiGraph:
 
             # Add edge from main token to its alternatives only
             G.add_edge(parent_token, alt_id)
-            last_id = parent_token
+        
+        if predictions:
+            if i == len(predictions) -1:
+                last_id = f"t{i}"
+
 
     G.add_node("END", token="END", prob="100%", color="red", size=6000)
-    G.add_edge(last_id, "END")
+    if last_id:
+        G.add_edge(last_id, "END")
+    else:
+        G.add_edge("START", "END")
+
 
     return G
 
 
-def visualize_predictions(G: nx.DiGraph, figsize=(14, 80)):
+def _visualize_predictions_plt(G: nx.DiGraph, figsize=(14, 80)):
     """
     Visualize the token prediction graph with vertical layout and alternating alternatives.
     """
@@ -124,12 +148,28 @@ def visualize_predictions(G: nx.DiGraph, figsize=(14, 80)):
     # Position alternative nodes to left and right of main tokens
     for node in G.nodes():
         if "_alt" in node:
-            main_token = node.split("_")[0]
+            main_token_prefix = node.split("_")[0]
+            # Find the corresponding main token node
+            main_token_node = None
+            if main_token_prefix == 't0':
+                main_token_node = 'START'
+            else:
+                # This logic assumes main_token_prefix is like 't<number>'
+                try:
+                    main_token_index = int(main_token_prefix[1:])
+                    if main_token_index > 0:
+                        main_token_node = f"t{main_token_index - 1}"
+                    else:
+                        main_token_node = "START"
+                except (ValueError, IndexError):
+                    main_token_node = "START" # Fallback
+
             alt_num = int(node.split("_alt")[1])
-            if main_token in pos:
+            if main_token_node in pos:
                 # Place first alternative to left, second to right
                 x_offset = -spacing_x if alt_num == 0 else spacing_x
-                pos[node] = (x_offset, pos[main_token][1] + 0.05)
+                pos[node] = (pos[main_token_node][0] + x_offset, pos[main_token_node][1] - spacing_y/2)
+
 
     # Draw nodes
     node_colors = [G.nodes[node]["color"] for node in G.nodes()]
@@ -155,3 +195,9 @@ def visualize_predictions(G: nx.DiGraph, figsize=(14, 80)):
 
     # plt.tight_layout()
     return plt
+
+def visualizer(prompt: str, model_provider: str, model_name: str, max_tokens: int = 10):
+    predictor = TokenPredictor(model_provider=model_provider, model_name=model_name)
+    predictions = predictor.predict_tokens(prompt, max_tokens=max_tokens)
+    graph = create_token_graph(model_name, predictions)
+    return _visualize_predictions_plt(graph)
