@@ -206,3 +206,5 @@ week5/vector_db/
 
 local/
 
+# uv lock file - causes merge conflicts in fork
+uv.lock
