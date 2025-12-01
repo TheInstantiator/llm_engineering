@@ -274,11 +274,23 @@ def rust_toolchain_info():
         "execution_examples": [],
     }
 
+    # Helper to find Rust tools - check ~/.cargo/bin first (common install location)
+    def _which_rust(name):
+        # First check PATH
+        path = _which(name)
+        if path:
+            return path
+        # Then check ~/.cargo/bin directly (Jupyter kernels may not have it in PATH)
+        cargo_bin = os.path.join(os.path.expanduser("~"), ".cargo", "bin", name)
+        if os.path.isfile(cargo_bin) and os.access(cargo_bin, os.X_OK):
+            return cargo_bin
+        return ""
+
     # Paths
-    rustc_path = _which("rustc")
-    cargo_path = _which("cargo")
-    rustup_path = _which("rustup")
-    ra_path = _which("rust-analyzer")
+    rustc_path = _which_rust("rustc")
+    cargo_path = _which_rust("cargo")
+    rustup_path = _which_rust("rustup")
+    ra_path = _which_rust("rust-analyzer")
 
     info["rustc"]["path"] = rustc_path or ""
     info["cargo"]["path"] = cargo_path or ""
