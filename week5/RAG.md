@@ -73,3 +73,38 @@ Modern RAG systems use **Vector Datastores** to efficiently find the most releva
     *   LLM generates the answer.
 
 > **Summary:** RAG is about finding the best "encoding tricks" (retrieval strategies) to get the most relevant context, so the LLM can give the best answer.
+
+### Set up the 2 key LangChain objects: retriever and llm
+
+#### A sidebar on "temperature":
+- Controls how diverse the output is
+- A temperature of 0 means that the output should be predictable
+- Higher temperature for more variety in answers
+
+Some people describe temperature as being like 'creativity' but that's not quite right
+
+* It actually controls which tokens get selected during inference
+- temperature=0 means: always select the token with highest probability
+- temperature=1 usually means: a token with 10% probability should be picked 10% of the time
+
+Note: a temperature of 0 doesn't mean outputs will always be reproducible. You also need to set a random seed. We will do that in weeks 6-8. (Even then, it's not always reproducible.)
+
+Note 2: if you want creativity, use the System Prompt!  Give it context and ask for something different!
+
+## Python module implimentation
+
+### ingest.py  
+
+Read in Knowledge Base, break into chunks, create embeddings, and store in vector database
+
+### answer.py
+
+Read in question, create embedding, retrieve relevant context, and generate answer  
+Two key functions:
+
+1. fetch_context(question)  
+2. answer_question(question, history)  
+
+### app.py
+
+A Gradio app that allows users to interact with the RAG system  
