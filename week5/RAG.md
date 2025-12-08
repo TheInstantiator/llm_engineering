@@ -108,3 +108,49 @@ Two key functions:
 ### app.py
 
 A Gradio app that allows users to interact with the RAG system  
+
+## Some issues with base implementation
+
+1. It does not have history.
+
+Question to Rag:
+Who is Avery:  
+- answer: about Avery Lancaster in the data.
+
+Follow up question to Rag:
+What is **her** salary?
+- answer: Samantha Greene's salary is $70,000.
+
+Issues:
+1. It does not have history.
+2. It does not have context.
+3. It does not have a way to combine the context and the question.
+
+## How `pro_implementation/answer.py` Fixes These Issues
+
+The professional implementation addresses these limitations through three key mechanisms:
+
+### 1. Query Rewriting (Fixes "No History" & "No Context" in Search)
+When a user asks "What is **her** salary?", a standard vector search fails because "her" is ambiguous.
+The `rewrite_query` function uses an LLM to interpret the question **in the context of the conversation history**.
+
+*   **Input:** "What is her salary?" + History `[User: Who is Avery, AI: Avery is...]`
+*   **Rewritten Query:** "What is Avery Lancaster's salary?"
+*   **Result:** The database now searches for "Avery Lancaster", effectively retrieving the correct document.
+
+### 2. Hybrid Retrieval (Fixes "Missing Context")
+The system doesn't rely solely on the rewritten query. The `fetch_context` function performs a **hybrid search**:
+1.  Searches for the **original question** ("What is her salary?").
+2.  Searches for the **rewritten question** ("What is Avery Lancaster's salary?").
+3.  **Merges** the results from both searches.
+
+This ensures that we catch both direct matches and context-aware matches, significantly reducing the chance of missing relevant information.
+
+### 3. Full Context Generation (Fixes "Combining Context and Question")
+In the final step, `make_rag_messages` constructs the prompt for the LLM by combining:
+*   **System Prompt:** Defines the persona and instructions.
+*   **Retrieved Context:** The actual text chunks about Avery found in the database.
+*   **Conversation History:** The previous turns of the chat.
+*   **Current Question:** The user's latest input.
+
+By seeing the full history AND the retrieved documents about Avery, the LLM allows the user to speak naturally ("her salary") while providing a precise, fact-based answer.
