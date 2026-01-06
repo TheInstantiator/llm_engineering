@@ -1,68 +1,115 @@
-Setup:
-Clone the repo from:
-https://github.com/ed-donner/llm_engineering
-Fork the repo:
-https://github.com/TheInstantiator/llm_engineering.git
-Setup git go push changes to the fork on llm_main and pull new changes from the original
+# 🚀 LLM Engineering Fork
 
-Download Ollama
-Seems like I have to put Ollama on C drive
-ollama.com/search shows all models
-Gpt-os (gpt)
-Deepseek-r1 (dem chinese)
-Llama3.2 (meta)
-Gemma (google)
-Don't see a grok, but grok tells me grok-2
-Not installed
-VsCode
-Extensions
-Python
-Jupyter
-UV Package Manager
-Setup .env with GROK_API_KEY, GEMINI_API_KEY, and OPENAI_KEY
-I didn't put any billing info to OPENAI or DEEPSEEK
+Personal notes and setup guide for the [LLM Engineering](https://github.com/ed-donner/llm_engineering) course.
 
-Notes:
-When running jupyter notebooks in the page in the upper right you have to set environment.
+## 🛠️ Repository Setup
 
-OpenAI calls for other APIs
+1. **Clone the original repo:**
+
+    ```bash
+    git clone https://github.com/ed-donner/llm_engineering
+    ```
+
+2. **Fork the repo:**
+    <https://github.com/TheInstantiator/llm_engineering.git>
+
+3. **Goal:** Setup git to push changes to the fork on `llm_main` and pull new changes from the original.
+
+## 📦 Tools & Environment
+
+### Essential Software
+
+- **IDE:** 🆚 VS Code (with Python & Jupyter extensions)
+- **Language:** 🐍 Python
+- **Package Manager:** ⚡ `uv` Package Manager
+- **Notebooks:** 📓 Jupyter
+
+### 🦙 Ollama Setup
+
+- Download **Ollama** (Note: May need to install on `C:` drive if on Windows).
+- Visit [ollama.com/search](https://ollama.com/search) to find models.
+
+**Target Models:**
+
+- `gpt-os` (GPT)
+- `deepseek-r1` (DeepSeek)
+- `llama3.2` (Meta)
+- `gemma` (Google)
+- `grok-2` (xAI - check availability)
+
+## 🔑 Configuration (.env)
+
+Setup your `.env` file with the following keys:
+
+- `GROK_API_KEY`
+- `GEMINI_API_KEY`
+- `OPENAI_KEY`
+
+> **Note:** Ensure you set the environment correctly when running Jupyter notebooks (upper right kernel selector). No code billing info added for OpenAI or DeepSeek yet.
+
+## 💻 Code Snippets
+
+### OpenAI Compatible Clients (Grok & Gemini)
+
+```python
+from openai import OpenAI
+import os
+
+# Grok Setup
 GROK_BASE_URL = "https://api.x.ai/v1"
-grok = OpenAI(base_url=GROK_BASE_URL, api_key=grok_api_key)
+grok = OpenAI(base_url=GROK_BASE_URL, api_key=os.getenv("GROK_API_KEY"))
 
+# Gemini Setup
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-gemini = OpenAI(base_url=GEMINI_BASE_URL, api_key=gemini_api_key)
+gemini = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
+```
 
-## System Prompts 
-# System Prompt (system_prompt):
+## 🧠 Prompt Engineering Notes
 
-Acts like giving the AI its job description
-Tells it to be an NFL injury report analyst
-Defines exactly what information to look for (name, injury, status)
-Specifies how to format the output (markdown tables)
-This stays consistent across all injury report requests
+### System Prompt (`system_prompt`)
 
-# User Prompt (user_prompt_prefix):
+- **Job Description:** Acts like giving the AI its role (e.g., NFL injury report analyst).
+- **Task:** Defines exactly what info to look for.
+- **Format:** Specifies output format (e.g., markdown tables).
+- *Consistency:* Stays the same across requests.
 
-Gives the specific task for this particular website
-Tells it to ignore non-injury content
-Specifies what to do with the website content that follows
-Gets combined with the actual website content
-Messages List:
+### User Prompt (`user_prompt_prefix`)
 
-Combines both prompts in the format OpenAI expects
-Always has system message first, then user message
+- **Task:** Specific task for the current input.
+- **Constraint:** Tells it to ignore non-relevant content.
+- **Action:** Specifies what to do with the following content.
 
-Git Flow:
-# fetch latest from upstream
+### Message Structure
+
+Combines prompts for the API:
+
+1. **System Message** (First)
+2. **User Message** (Second)
+
+## 🔄 Git Workflow Cheat Sheet
+
+**Fetch latest from upstream:**
+
+```bash
 git fetch upstream
+```
 
-# ensure you're on llm_main
+**Ensure you're on `llm_main`:**
+
+```bash
 git checkout llm_main
+```
 
-# merge upstream/main
+**Merge upstream changes:**
+
+```bash
 git merge upstream/main
-# or rebase:
-# git rebase upstream/main
+# OR
+git rebase upstream/main
+```
 
-# push merged changes to your fork
+**Push to your fork:**
+
+```bash
 git push origin llm-main
+```
