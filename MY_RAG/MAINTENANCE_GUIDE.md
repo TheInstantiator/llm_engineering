@@ -1,6 +1,6 @@
 # Knowledge Base Maintenance Guide
 
-This guide explains how to keep your Vector Database in sync with your Google Drive data.
+This guide explains how to keep your Vector Database in sync with your Google Drive data using the new V2 Agentic Pipeline.
 
 ## The 2-Step Sync Pipeline
 
@@ -25,22 +25,29 @@ robocopy "G:\Shared drives\WMS selection" "E:\WMS_selection" /MIR /MT:8 /R:1 /W:
 
 ---
 
-### Step 2: Sync SSD (E:) to Vector Database
-**Goal:** Update the AI brains to match your files on E:.
+### Step 2: Agentic Schema Ingestion (Native RAG V2)
+**Goal:** Process targeted folders, convert multi-format docs to Markdown, pre-screen them with an LLM, and embed into ChromaDB.
 
 1. Open WSL (Ubuntu).
-2. Navigate to your project:
+2. Navigate to your project's RAG directory:
    ```bash
-   cd ~/projects/llm_engineering
+   cd ~/projects/llm_engineering/MY_RAG
    ```
-3. Open the Incremental Sync Notebook:
-   *   Filename: `week5/day2-incremental-sync.ipynb`
-4. **Run All Cells.**
+3. **Configure the Ingestion Run:** Open `config.json` and verify the targeted runtime settings:
+   *   `included_folders`: Define exactly which folders to ingest (e.g., `["/mnt/e/WMS_selection/WMS Business Process and SOP/SYML SOP"]`).
+   *   `llm_model`: Set the "Brain" using LiteLLM prefixes (e.g., `xai/grok-4-1-fast-non-reasoning`). Ensure `.env` has the applicable API KEY.
+   *   `max_workers`: Controls the number of threads for parallel document parsing and AI screening calls.
 
-### Summary of Logic
-| Changed on Google Drive? | Step 1 (Robocopy) | Step 2 (Python Script) | Result |
-| :--- | :--- | :--- | :--- |
-| **New File** | Downloads to E: | Detects new file $\to$ Add to DB | **Added** |
-| **Edited File** | Re-downloads to E: | Detects hash change $\to$ Update DB | **Updated** |
-| **Deleted File** | Deletes from E: | Detects missing file $\to$ Remove from DB | **Deleted** |
-| **No Change** | **Skips (Fast)** | **Skips (Fast)** | **No Action** |
+4. **Execute the Agentic Pipeline:**
+   This project uses `uv` for seamless dependency management via PEP 723 inline metadata. Just run:
+   ```bash
+   uv run ingest_v2.py
+   ```
+
+### V2 Processing Pipeline Flow
+When you run `ingest_v2.py`, the python script natively handles the following workflow:
+1. **Format Conversion (`pymupdf4llm` & `pandas`):** Perfect transcriptions of PDFs to Markdown (preserving tables/structure) alongside standard `.md` and `.txt` files. Automatically converts Excel Workbooks (`.xlsx`) sheet-by-sheet into markdown tables.
+2. **Metadata Screening (`litellm`):** The LLM agent acts as a "Senior Technical Screener", evaluating the document and generating a semantic summary.
+3. **Native Pydantic Chunking:** Splits the text and stamps the AI's semantic summary into the structured metadata of *every single chunk* so context is never lost during retrieval.
+4. **Local GPU Embedding (`sentence-transformers`):** Embeds the text using your `gte-Qwen2-7B-instruct` local model.
+5. **Persistence (`chromadb`):** Writes the chunks natively to Chroma without the bloated LangChain wrappers.

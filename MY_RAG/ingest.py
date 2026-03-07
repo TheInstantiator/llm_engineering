@@ -1,14 +1,18 @@
-
 # /// script
 # dependencies = [
 #     "langchain-community",
 #     "langchain-text-splitters",
 #     "langchain-huggingface",
+#     "langchain-google-genai",
 #     "langchain-chroma",
 #     "chromadb",
 #     "sentence-transformers",
-#     "langchain-openai",
 #     "python-dotenv",
+#     "langchain",
+#     "langchain-core",
+#     "einops",
+#     "transformers==4.46.3",
+#     "accelerate>=0.26.0",
 # ]
 # ///
 
@@ -23,9 +27,8 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
 
 # Disable tokenizers parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -34,7 +37,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 load_dotenv(override=True)
 
 class IngestionSystem:
-    def __init__(self, source_path: str, db_path: str, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+    def __init__(self, source_path: str, db_path: str, model_name: str = "Alibaba-NLP/gte-Qwen2-7B-instruct"):
         self.source_path = source_path
         self.db_path = db_path
         self.state_file = os.path.join(db_path, "ingestion_state.json")
@@ -45,13 +48,31 @@ class IngestionSystem:
         self._embeddings = None
         self._vectorstore = None
         self._text_splitter = None
-        self._llm = None
+        # self._llm = None
 
     @property
     def embeddings(self):
         if self._embeddings is None:
-            print(f"Loading embedding model: {self.model_name}...")
-            self._embeddings = HuggingFaceEmbeddings(model_name=self.model_name)
+            print(f"Loading Local Embeddings: {self.model_name}...")
+            # Use GPU if available AND requested (Safe default for 7B models on 8GB cards)
+            import torch
+            # For 7B models, we need ~16GB VRAM. If on 8GB card, force CPU.
+            # You can override this by setting RAG_DEVICE=cuda
+            env_device = os.getenv("RAG_DEVICE", "cpu")
+            device = env_device
+            
+            if env_device == "cuda" and not torch.cuda.is_available():
+                print("  --> WARNING: CUDA requested but not available. Falling back to CPU.")
+                device = "cpu"
+                
+            print(f"  --> Running on device: {device.upper()}")
+            
+            # Using HuggingFace (Local)
+            self._embeddings = HuggingFaceEmbeddings(
+                model_name=self.model_name,
+                model_kwargs={"trust_remote_code": True, "device": device},
+                encode_kwargs={"normalize_embeddings": True}
+            )
         return self._embeddings
 
     @property
@@ -67,25 +88,14 @@ class IngestionSystem:
     @property
     def text_splitter(self):
         if self._text_splitter is None:
-            self._text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            # Using your notebook settings: 1000 char chunks, 250 overlap
+            self._text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=250)
         return self._text_splitter
 
-    @property
-    def llm(self):
-        if self._llm is None:
-            api_key = os.getenv("GROK_API_KEY")
-            base_url = os.getenv("GROK_BASE_URL", "https://api.x.ai/v1")
-            if not api_key:
-                print("WARNING: GROK_API_KEY not found. Summarization will be skipped.")
-                return None
-            
-            self._llm = ChatOpenAI(
-                base_url=base_url,
-                api_key=api_key,
-                model="grok-2-latest", # Fast and capable
-                temperature=0.0
-            )
-        return self._llm
+#     @property
+#     def llm(self):
+#         """LLM removed for speed optimization."""
+#         pass
 
     def calculate_md5(self, file_path: str) -> Optional[str]:
         """Reads a file and returns its MD5 hash."""
@@ -122,25 +132,9 @@ class IngestionSystem:
         with open(self.state_file, 'w') as f:
             json.dump(state, f, indent=2)
 
-    def generate_summary(self, content: str, filename: str) -> str:
-        """Uses LLM to generate a one-sentence summary."""
-        if not self.llm:
-            return "No summary (LLM not configured)."
-        
-        try:
-            # Truncate content to avoid huge context costs (first 3000 chars is usually enough for a summary)
-            truncated_content = content[:3000]
-            
-            prompt = ChatPromptTemplate.from_template(
-                "Summarize the following document in ONE concise sentence describing what it is. "
-                "Focus on its purpose (e.g., 'A contract for...').\n\nFilename: {filename}\nContent:\n{content}"
-            )
-            chain = prompt | self.llm
-            response = chain.invoke({"filename": filename, "content": truncated_content})
-            return response.content.strip()
-        except Exception as e:
-            print(f"  Summary generation failed: {e}")
-            return "Summary generation failed."
+#     def generate_summary(self, content: str, filename: str) -> str:
+#         """Summarization disabled."""
+#         return ""
 
     def scan_files(self) -> Tuple[Dict[str, Any], List[Tuple[str, str]], List[str], int]:
         """Scans source and compares with ledger."""
@@ -217,6 +211,10 @@ class IngestionSystem:
         if files_to_process:
             print(f"\nProcessing {len(files_to_process)} additions/updates...")
             
+            chunk_batch = []
+            # Local models can handle larger batches, but let's keep it safe to prevent RAM spikes
+            BATCH_LIMIT = 50 
+            
             for i, (action, file_path) in enumerate(files_to_process):
                 try:
                     if action == "MODIFIED":
@@ -231,22 +229,45 @@ class IngestionSystem:
                         
                     content = docs[0].page_content
                     
-                    # 1. Generate Summary (The New Step)
+                    # 1. Generate Summary (Skipped)
                     print(f"  [{i+1}/{len(files_to_process)}] Ingesting: {os.path.basename(file_path)}")
-                    summary = self.generate_summary(content, os.path.basename(file_path))
+                    # For huge datasets, printing every file might spam. Let's print every 10 or large files options.
                     
-                    # 2. Update State with Summary
-                    current_state[file_path]["summary"] = summary
+                    # summary = self.generate_summary(content, os.path.basename(file_path))
+                    current_state[file_path]["summary"] = "" # summary
                     
-                    # 3. Embed and Save to Vector DB
+                    # 2. Split and Buffer chunks
                     chunks = self.text_splitter.split_documents(docs)
                     if chunks:
-                        # Optional: Enhance metadata with summary?
-                        # for c in chunks: c.metadata["summary"] = summary
-                        db.add_documents(chunks)
+                        chunk_batch.extend(chunks)
+                    
+                    # 3. Process Batch (Strict Slicing)
+                    # We use a while loop to drain the buffer in chunks of BATCH_LIMIT
+                    while len(chunk_batch) >= BATCH_LIMIT:
+                        current_batch = chunk_batch[:BATCH_LIMIT]
+                        chunk_batch = chunk_batch[BATCH_LIMIT:] # Remove processed
                         
+                        try:
+                            # print(f"    --> Committing local batch of {len(current_batch)} chunks...")
+                            db.add_documents(current_batch)
+                        except Exception as e:
+                            print(f"    Batch Error: {e}")
+                            # If a batch fails, we might lose data here, but safer than crashing
+                        
+                        # Progress Marker
+                        if (i + 1) % 10 == 0 and len(chunk_batch) < BATCH_LIMIT:
+                             print(f"  Processed {i+1}/{len(files_to_process)} files...")
+
                 except Exception as e:
                     print(f"  FAILED to process {file_path}: {e}")
+
+            # 4. Flush remaining chunks
+            if chunk_batch:
+                print(f"    --> Committing final batch of {len(chunk_batch)} chunks...")
+                try:
+                    db.add_documents(chunk_batch)
+                except Exception as e:
+                    print(f"    Final Batch Error: {e}")
 
         # -- C. COMMIT STATE --
         print("\nSaving new state to ledger...")
@@ -258,7 +279,7 @@ if __name__ == "__main__":
     SOURCE_PATH = os.getenv("RAG_SOURCE_PATH", "/mnt/e/WMS_selection")
     DB_PATH = os.getenv("RAG_DB_PATH", "/mnt/e/chroma_db_wms")
     
-    print("--- WMS RAG INGESTION SYSTEM (With AI Summaries) ---")
+    print("--- WMS RAG INGESTION SYSTEM (Gemini Embeddings + AI Summaries) ---")
     print(f"Source: {SOURCE_PATH}")
     print(f"Database: {DB_PATH}")
     

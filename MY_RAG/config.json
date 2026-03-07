@@ -1,0 +1,18 @@
+{
+    "included_folders": [
+        "/mnt/e/WMS_selection/WMS Business Process and SOP/SYML SOP",
+        "/mnt/e/WMS_selection/Manhattan Extensions"
+    ],
+    "excluded_folders": [
+        "/mnt/e/WMS_selection/WMS Business Process and SOP/SYML SOP/I C",
+        "/mnt/e/WMS_selection/Manhattan Extensions/Extension Review recordings"
+    ],
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "chunk_settings": {
+        "chunk_size": 1000,
+        "chunk_overlap": 250
+    },
+    "llm_model": "xai/grok-4-1-fast-non-reasoning",
+    "db_path": "/mnt/e/chroma_db_wms_v2",
+    "max_workers": 16
+}
